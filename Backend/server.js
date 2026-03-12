@@ -81,17 +81,20 @@ app.get('/api/download', (req, res) => {
 
     const ytDlp = spawn('yt-dlp', args);
     
-    // Usamos FFmpeg para asegurar que el codec de video sea H.264 (libx264) y el de audio sea AAC
-    // Esto garantiza que el video se vea en TODOS los dispositivos (iPhone, Android, PC)
+    // Usamos FFmpeg para asegurar compatibilidad total:
+    // 1. -pix_fmt yuv420p: Crucial para que se vea en iPhone/Android.
+    // 2. Transcodificamos a H.264 y AAC de forma ultra-rápida.
     const ffmpeg = spawn('ffmpeg', [
-        '-i', 'pipe:0',             // Entrada desde el pipe de yt-dlp
+        '-i', 'pipe:0',             // Entrada desde yt-dlp
         '-c:v', 'libx264',          // Codec de video universal
-        '-preset', 'veryfast',      // Procesamiento rápido
-        '-crf', '23',               // Calidad equilibrada
+        '-preset', 'ultrafast',     // Máxima velocidad para que no parezca que tarda
+        '-crf', '25',               // Calidad buena (un poco más comprimida para rapidez)
+        '-pix_fmt', 'yuv420p',      // EL SECRETO: Formato de píxeles compatible con móviles
         '-c:a', 'aac',              // Codec de audio universal
-        '-f', 'mp4',                // Formatos MP4
-        '-movflags', 'frag_keyframe+empty_moov+faststart', // Optimizado para streaming
-        'pipe:1'                    // Salida a la respuesta HTTP
+        '-b:a', '128k',             // Calidad de audio estándar
+        '-f', 'mp4',
+        '-movflags', 'frag_keyframe+empty_moov+faststart',
+        'pipe:1'
     ]);
 
     ytDlp.stdout.pipe(ffmpeg.stdin);
