@@ -2,6 +2,7 @@ const express = require('express');
 const { spawn } = require('child_process');
 const cors = require('cors');
 const path = require('path');
+const https = require('https'); // Para el proxy de miniaturas
 
 const app = express();
 app.use(cors());
@@ -13,6 +14,23 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Endpoint de salud para cron-job.org
 app.get('/api/ping', (req, res) => {
     res.status(200).send('NexStream is awake! 🚀');
+});
+
+// Proxy para saltar el bloqueo de miniaturas de Instagram/FB
+app.get('/api/proxy-thumb', (req, res) => {
+    const thumbUrl = req.query.url;
+    if (!thumbUrl) return res.status(400).send('URL missing');
+    
+    https.get(thumbUrl, (proxyRes) => {
+        // Copiamos el tipo de contenido original
+        res.set('Content-Type', proxyRes.headers['content-type'] || 'image/jpeg');
+        // Cachear las miniaturas por 1 día para mejorar rendimiento
+        res.set('Cache-Control', 'public, max-age=86400');
+        proxyRes.pipe(res);
+    }).on('error', (e) => {
+        console.error('Error in proxy-thumb:', e);
+        res.status(500).send('Error');
+    });
 });
 
 // Endpoint para obtener información del video antes de descargar
@@ -90,6 +108,8 @@ app.get('/api/download', (req, res) => {
         '-preset', 'ultrafast',     // Máxima velocidad para que no parezca que tarda
         '-crf', '25',               // Calidad buena (un poco más comprimida para rapidez)
         '-pix_fmt', 'yuv420p',      // EL SECRETO: Formato de píxeles compatible con móviles
+        '-profile:v', 'main',       // Perfil Main: equilibrio perfecto entre calidad y compatibilidad móvil
+        '-level', '3.1',            // Nivel 3.1: Asegura que funcione en dispositivos antiguos y modernos
         '-c:a', 'aac',              // Codec de audio universal
         '-b:a', '128k',             // Calidad de audio estándar
         '-f', 'mp4',

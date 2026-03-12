@@ -316,7 +316,9 @@
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
 
-                document.getElementById('vidThumb').src = data.thumbnail;
+                // Usamos el proxy para saltar el bloqueo de seguridad de IG/FB
+                document.getElementById('vidThumb').src = `${API_BASE}/api/proxy-thumb?url=${encodeURIComponent(data.thumbnail)}`;
+                
                 document.getElementById('vidTitle').innerText = data.title;
                 document.getElementById('vidMeta').innerText = `${data.platform.toUpperCase()} • ${data.duration}`;
                 
