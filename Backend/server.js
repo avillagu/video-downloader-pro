@@ -7,8 +7,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Servir archivos estáticos del Frontend
-app.use(express.static(path.join(__dirname, '../Frontend')));
+// Servir archivos estáticos del Frontend (ahora en la carpeta public)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Endpoint para obtener información del video antes de descargar
 app.get('/api/info', (req, res) => {
