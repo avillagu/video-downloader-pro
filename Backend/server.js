@@ -10,6 +10,11 @@ app.use(express.json());
 // Servir archivos estáticos del Frontend (ahora en la carpeta public)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Endpoint de salud para cron-job.org
+app.get('/api/ping', (req, res) => {
+    res.status(200).send('NexStream is awake! 🚀');
+});
+
 // Endpoint para obtener información del video antes de descargar
 app.get('/api/info', (req, res) => {
     const url = req.query.url;
