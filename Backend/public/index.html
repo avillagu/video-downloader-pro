@@ -3,396 +3,297 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NexStream | The Ultimate Downloader</title>
+    <title>NexStream | Video Downloader Pro</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #000000;
+            --primary: #FF3D00;
+            --primary-glow: rgba(255, 61, 0, 0.4);
+            --bg: #050505;
+            --card-bg: #111111;
             --text: #ffffff;
-            --text-muted: #999999;
-            --primary: #ffffff;
-            --border: rgba(255, 255, 255, 0.1);
-            --input-bg: #0a0a0a;
-            --accent-blue: #0070f3;
+            --text-dim: #888888;
+            --border: #222222;
+            --gradient: linear-gradient(135deg, #FF3D00 0%, #FF8A00 100%);
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Outfit', sans-serif;
         }
 
         body {
             background-color: var(--bg);
             color: var(--text);
             min-height: 100vh;
-            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
-        /* --- HERO SECTION --- */
-        .hero {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+        /* --- HEADER --- */
+        header {
+            padding: 30px 5%;
+            display: flex;
+            justify-content: center;
+        }
+
+        .logo {
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -1.5px;
+            display: flex;
             align-items: center;
-            padding: 0 80px;
-            height: 100vh;
-            max-width: 1400px;
-            margin: 0 auto;
+            gap: 10px;
         }
 
-        .hero-content {
-            padding-right: 40px;
-            animation: fadeInUp 1s ease-out;
+        .logo span { color: var(--primary); }
+
+        /* --- MAIN HERO --- */
+        .hero {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0 5% 100px;
+            text-align: center;
         }
 
-        @keyframes fadeInUp {
+        h1 {
+            font-size: clamp(2.5rem, 8vw, 4.5rem);
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 20px;
+            letter-spacing: -2px;
+        }
+
+        h1 span {
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-dim);
+            max-width: 600px;
+            margin-bottom: 50px;
+        }
+
+        /* --- SEARCH BOX --- */
+        .search-container {
+            width: 100%;
+            max-width: 700px;
+            background: var(--card-bg);
+            padding: 10px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            transition: all 0.3s;
+        }
+
+        .search-container:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 30px var(--primary-glow);
+        }
+
+        input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: white;
+            font-size: 1.1rem;
+            padding: 15px 20px;
+        }
+
+        .btn-analyze {
+            background: var(--gradient);
+            color: white;
+            border: none;
+            padding: 15px 35px;
+            border-radius: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-analyze:hover { transform: scale(1.03); }
+
+        /* --- PREVIEW --- */
+        #previewArea {
+            display: none;
+            width: 100%;
+            max-width: 700px;
+            margin-top: 40px;
+            background: var(--card-bg);
+            border-radius: 24px;
+            padding: 25px;
+            border: 1px solid var(--border);
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideUp {
             from { opacity: 0; transform: translateY(30px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        h1 {
-            font-size: 6rem;
-            font-weight: 800;
-            line-height: 0.9;
-            letter-spacing: -4px;
+        .vid-card {
+            display: flex;
+            gap: 25px;
             margin-bottom: 25px;
+            text-align: left;
         }
 
-        .hero p {
-            font-size: 1.5rem;
-            color: var(--text-muted);
-            margin-bottom: 40px;
-            font-weight: 300;
-        }
-
-        /* --- INPUT BAR --- */
-        .search-container {
-            position: relative;
-            max-width: 500px;
-        }
-
-        .search-bar {
-            width: 100%;
-            background: var(--input-bg);
-            border: 1px solid var(--border);
+        .vid-thumb {
+            width: 200px;
+            aspect-ratio: 16/9;
             border-radius: 12px;
-            padding: 18px 60px 18px 50px;
-            color: #fff;
-            font-size: 1.1rem;
-            outline: none;
-            transition: border-color 0.3s;
-        }
-
-        .search-bar:focus {
-            border-color: var(--accent-blue);
-            box-shadow: 0 0 0 1px var(--accent-blue);
-        }
-
-        .search-icon {
-            position: absolute;
-            left: 18px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-muted);
-        }
-
-        .search-btn {
-            position: absolute;
-            right: 8px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: #fff;
-            color: #000;
-            border: none;
-            width: 42px;
-            height: 42px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .search-btn:hover {
-            transform: translateY(-50%) scale(1.05);
-            background: #eee;
-        }
-
-        /* --- HERO IMAGE --- */
-        .hero-visual {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            animation: float 6s ease-in-out infinite;
-        }
-
-        @keyframes float {
-            0% { transform: translateY(0px); }
-            50% { transform: translateY(-20px); }
-            100% { transform: translateY(0px); }
-        }
-
-        .hero-img {
-            width: 110%;
-            max-width: 700px;
-            filter: drop-shadow(0 0 50px rgba(255,255,255,0.05));
-        }
-
-        /* --- PREVIEW SECTION --- */
-        #previewSection {
-            display: none;
-            padding: 100px 80px;
-            background: #050505;
-        }
-
-        .preview-card {
-            max-width: 900px;
-            margin: 0 auto;
-            background: #0a0a0a;
-            border: 1px solid var(--border);
-            border-radius: 24px;
-            overflow: hidden;
-            display: grid;
-            grid-template-columns: 400px 1fr;
-        }
-
-        .preview-thumb {
-            width: 100%;
-            height: 100%;
             object-fit: cover;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
         }
 
-        .preview-details {
-            padding: 40px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        .preview-title {
-            font-size: 1.8rem;
+        .vid-title {
+            font-size: 1.3rem;
             font-weight: 700;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
+            line-height: 1.3;
         }
 
-        .preview-meta {
-            color: var(--text-muted);
-            margin-bottom: 25px;
-        }
-
-        .download-btn {
-            background: #fff;
-            color: #000;
-            border: none;
-            padding: 18px;
-            border-radius: 12px;
-            font-weight: 700;
-            font-size: 1.1rem;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        .download-btn:hover { transform: scale(1.02); }
-
-        /* --- INFO SECTIONS --- */
-        .info-section {
-            padding: 100px 80px;
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-
-        .section-title {
-            font-size: 2.5rem;
-            font-weight: 800;
-            letter-spacing: -1.5px;
-            margin-bottom: 50px;
-            text-align: center;
-        }
-
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 40px;
-            margin-bottom: 100px;
-        }
-
-        .feature-card {
-            background: #0a0a0a;
-            border: 1px solid var(--border);
-            padding: 40px;
-            border-radius: 24px;
-            transition: transform 0.3s;
-        }
-
-        .feature-card:hover { transform: translateY(-10px); border-color: #333; }
-
-        .feature-card h3 {
-            font-size: 1.4rem;
-            margin-bottom: 15px;
-            font-weight: 600;
-        }
-
-        .feature-card p {
-            color: var(--text-muted);
-            line-height: 1.6;
-        }
-
-        .platforms-line {
-            display: flex;
-            justify-content: center;
-            gap: 40px;
-            flex-wrap: wrap;
-            opacity: 0.4;
-            margin-bottom: 100px;
-            font-weight: 600;
-            font-size: 1.2rem;
+        .vid-meta {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            text-transform: uppercase;
             letter-spacing: 1px;
         }
 
-        .faq-section {
-            max-width: 800px;
-            margin: 0 auto 100px;
+        .btn-download {
+            width: 100%;
+            background: white;
+            color: black;
+            border: none;
+            padding: 20px;
+            border-radius: 16px;
+            font-weight: 800;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
         }
 
-        .faq-item {
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid var(--border);
+        .btn-download:hover { background: #ddd; }
+
+        /* --- LOADER --- */
+        .loader {
+            display: none;
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255,255,255,0.2);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
         }
 
-        .faq-item h4 {
-            font-size: 1.2rem;
-            margin-bottom: 10px;
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* --- INFO --- */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            width: 100%;
+            max-width: 1100px;
+            margin-bottom: 100px;
         }
 
-        .faq-item p {
-            color: var(--text-muted);
-            line-height: 1.5;
-        }
-
-        /* --- FOOTER --- */
-        footer {
-            padding: 60px 80px;
-            border-top: 1px solid var(--border);
+        .info-card {
+            background: rgba(255,255,255,0.03);
+            padding: 40px;
+            border-radius: 30px;
+            border: 1px solid var(--border);
             text-align: center;
-            color: var(--text-muted);
+        }
+
+        .info-card h3 { margin-bottom: 15px; font-size: 1.4rem; }
+        .info-card p { color: var(--text-dim); line-height: 1.6; }
+
+        footer {
+            padding: 50px;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            color: var(--text-dim);
             font-size: 0.9rem;
         }
 
-        /* --- LOADER --- */
-        .loader-overlay {
-            display: none;
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #fff;
-            color: #000;
-            padding: 10px 20px;
-            border-radius: 100px;
-            font-weight: 700;
-            z-index: 2000;
-        }
-
-        @media (max-width: 1000px) {
-            .hero { grid-template-columns: 1fr; padding: 120px 30px; height: auto; text-align: center; }
-            .hero-content { padding-right: 0; }
-            h1 { font-size: 4rem; letter-spacing: -2px; }
-            .search-container { margin: 0 auto; }
-            .hero-img { width: 100%; margin-top: 50px; }
-            .preview-card { grid-template-columns: 1fr; }
-            .features-grid { grid-template-columns: 1fr; }
-            .info-section { padding: 60px 20px; }
+        @media (max-width: 650px) {
+            .search-container { flex-direction: column; background: transparent; border: none; box-shadow: none; padding: 0; }
+            input { background: var(--card-bg); border: 1px solid var(--border); border-radius: 15px; width: 100%; margin-bottom: 10px; }
+            .btn-analyze { width: 100%; justify-content: center; padding: 20px; }
+            .vid-card { flex-direction: column; }
+            .vid-thumb { width: 100%; }
+            h1 { font-size: 3rem; }
         }
     </style>
 </head>
 <body>
-    <div id="loader" class="loader-overlay">Analizando video...</div>
+
+    <header>
+        <div class="logo"><span>N</span>exStream</div>
+    </header>
 
     <main class="hero">
-        <div class="hero-content">
-            <h1>Save any video for free.</h1>
-            <p>Descarga contenido de alta calidad de cualquier plataforma con un solo clic. Sin anuncios, sin límites.</p>
-            
-            <div class="search-container">
-                <svg class="search-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/>
-                    <path d="M14 14L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-                <input type="text" id="urlInput" class="search-bar" placeholder="Pega el enlace del video aquí..." onkeydown="if(event.key==='Enter') analizar()">
-                <button class="search-btn" onclick="analizar()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                        <polyline points="12 5 19 12 12 19"></polyline>
-                    </svg>
-                </button>
-            </div>
+        <h1>Baja cualquier video <span>al instante.</span></h1>
+        <p>YouTube, Reels, TikTok y más. Formato universal MP4 compatible con todos los dispositivos.</p>
+
+        <div class="search-container">
+            <input type="text" id="urlInput" placeholder="Pega el enlace aquí..." onkeydown="if(event.key==='Enter') analizar()">
+            <button class="btn-analyze" onclick="analizar()">
+                <span id="btnText">Analizar</span>
+                <div id="btnLoader" class="loader"></div>
+            </button>
         </div>
-        <div class="hero-visual">
-            <img src="nexstream_hero.png" class="hero-img" alt="NexStream Hero Asset">
+
+        <div id="previewArea">
+            <div class="vid-card">
+                <img id="vidThumb" class="vid-thumb" src="" alt="Vid">
+                <div class="vid-info">
+                    <div id="vidTitle" class="vid-title">Cargando...</div>
+                    <div id="vidMeta" class="vid-meta">PLATAFORMA • 0:00</div>
+                </div>
+            </div>
+            <button class="btn-download" onclick="descargar()">Descargar en MP4 HD</button>
         </div>
     </main>
 
-    <div id="previewSection">
-        <div class="preview-card">
-            <img id="vidThumb" class="preview-thumb" src="" alt="Thumbnail">
-            <div class="preview-details">
-                <h2 id="vidTitle" class="preview-title">Título del video</h2>
-                <p id="vidMeta" class="preview-meta">Plataforma • 0:00</p>
-                
-                <select id="formatSelect" style="background:#1a1a1a; color:#fff; border:1px solid #333; padding:12px; border-radius:8px; margin-bottom:20px; outline:none; width: 100%;">
-                    <option value="">Mejor Calidad Disponible</option>
-                </select>
-
-                <button class="download-btn" onclick="descargar()">Descargar Ahora</button>
+    <section style="display: flex; justify-content: center; padding: 0 5%;">
+        <div class="info-grid">
+            <div class="info-card">
+                <h3>Universal</h3>
+                <p>Convertimos cada descarga a H.264 para que se vea en cualquier iPhone, Android o Smart TV.</p>
             </div>
-        </div>
-    </div>
-
-    <section class="info-section">
-        <div class="platforms-line">
-            <span>YOUTUBE</span> <span>TIKTOK</span> <span>INSTAGRAM</span> <span>FACEBOOK</span> <span>TWITTER</span> <span>REELS</span>
-        </div>
-
-        <h2 class="section-title">El poder de NexStream</h2>
-        <div class="features-grid">
-            <div class="feature-card">
-                <h3>Velocidad Rayo</h3>
-                <p>Nuestra arquitectura de streaming permite descargar videos 4K directamente a tu dispositivo sin procesamientos lentos en el servidor.</p>
+            <div class="info-card">
+                <h3>Privado</h3>
+                <p>Sin cuentas, sin rastreo. Tus descargas son solo tuyas.</p>
             </div>
-            <div class="feature-card">
-                <h3>Privacidad Total</h3>
-                <p>No almacenamos registros de tus descargas ni recolectamos datos personales. Tu actividad es 100% privada y segura.</p>
-            </div>
-            <div class="feature-card">
-                <h3>Sin Restricciones</h3>
-                <p>Descarga videos, audios o shorts de más de 1000 plataformas web sin límites de cantidad o tamaño de archivo.</p>
-            </div>
-        </div>
-
-        <h2 class="section-title">Preguntas Frecuentes</h2>
-        <div class="faq-section">
-            <div class="faq-item">
-                <h4>¿Es realmente gratis?</h4>
-                <p>Sí, NexStream es una herramienta de acceso gratuito para todos los usuarios. No requiere suscripciones ni pagos ocultos.</p>
-            </div>
-            <div class="faq-item">
-                <h4>¿Cómo descargo de TikTok sin marca de agua?</h4>
-                <p>Simplemente pega el enlace del TikTok; nuestro motor intentará extraer la versión directamente de los servidores de origen sin sellos de agua.</p>
-            </div>
-            <div class="faq-item">
-                <h4>¿Soporta calidad 4K?</h4>
-                <p>Absolutamente. Si el video original está disponible en 4K, NexStream te permitirá descargarlo en esa resolución máxima.</p>
+            <div class="info-card">
+                <h3>Sin Límites</h3>
+                <p>Descarga videos de cualquier tamaño en resolución máxima disponible.</p>
             </div>
         </div>
     </section>
 
     <footer>
-        <p>&copy; 2026 NexStream Pro. Todos los derechos reservados. Hecho con alta eficiencia.</p>
-        <p style="font-size: 0.7rem; margin-top: 10px; opacity: 0.5;">Este sitio debe ser utilizado únicamente para contenido bajo términos de uso libre o permiso del creador.</p>
+        <p>&copy; 2026 NexStream Pro • Calidad Máxima en MP4</p>
     </footer>
 
     <script>
@@ -400,46 +301,38 @@
 
         async function analizar() {
             const url = document.getElementById('urlInput').value.trim();
-            const loader = document.getElementById('loader');
-            const previewSection = document.getElementById('previewSection');
+            const btnText = document.getElementById('btnText');
+            const btnLoader = document.getElementById('btnLoader');
+            const previewArea = document.getElementById('previewArea');
 
             if (!url) return;
 
-            loader.style.display = 'block';
+            btnText.style.display = 'none';
+            btnLoader.style.display = 'block';
+            previewArea.style.display = 'none';
 
             try {
                 const res = await fetch(`${API_BASE}/api/info?url=${encodeURIComponent(url)}`);
                 const data = await res.json();
-                
                 if (data.error) throw new Error(data.error);
 
                 document.getElementById('vidThumb').src = data.thumbnail;
                 document.getElementById('vidTitle').innerText = data.title;
                 document.getElementById('vidMeta').innerText = `${data.platform.toUpperCase()} • ${data.duration}`;
-
-                const select = document.getElementById('formatSelect');
-                select.innerHTML = '<option value="">Mejor Calidad Disponible</option>';
-                data.formats.forEach(f => {
-                    const opt = document.createElement('option');
-                    opt.value = f.format_id;
-                    opt.innerText = `${f.resolution || f.format_id} - MP4`;
-                    select.appendChild(opt);
-                });
-
-                previewSection.style.display = 'block';
-                previewSection.scrollIntoView({ behavior: 'smooth' });
-
+                
+                previewArea.style.display = 'block';
+                previewArea.scrollIntoView({ behavior: 'smooth' });
             } catch (err) {
-                alert("Error: " + err.message);
+                alert("Error al analizar: " + err.message);
             } finally {
-                loader.style.display = 'none';
+                btnText.style.display = 'block';
+                btnLoader.style.display = 'none';
             }
         }
 
         function descargar() {
             const url = document.getElementById('urlInput').value.trim();
-            const format = document.getElementById('formatSelect').value;
-            window.location.href = `${API_BASE}/api/download?url=${encodeURIComponent(url)}&format=${format}`;
+            window.location.href = `${API_BASE}/api/download?url=${encodeURIComponent(url)}`;
         }
     </script>
 </body>

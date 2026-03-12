@@ -70,37 +70,52 @@ app.get('/api/download', (req, res) => {
     res.header('Content-Disposition', `attachment; filename="video.mp4"`);
     res.header('Content-Type', 'video/mp4');
 
+    // Forzamos la descarga en MP4 H.264 para compatibilidad universal
     const args = [
         url,
-        '-f', format || 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        '-f', format || 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         '--no-playlist',
         '--no-warnings',
-        '-o', '-' // Manda el video al stdout para streaming
+        '-o', '-' 
     ];
 
     const ytDlp = spawn('yt-dlp', args);
+    
+    // Usamos FFmpeg para asegurar que el codec de video sea H.264 (libx264) y el de audio sea AAC
+    // Esto garantiza que el video se vea en TODOS los dispositivos (iPhone, Android, PC)
+    const ffmpeg = spawn('ffmpeg', [
+        '-i', 'pipe:0',             // Entrada desde el pipe de yt-dlp
+        '-c:v', 'libx264',          // Codec de video universal
+        '-preset', 'veryfast',      // Procesamiento rápido
+        '-crf', '23',               // Calidad equilibrada
+        '-c:a', 'aac',              // Codec de audio universal
+        '-f', 'mp4',                // Formatos MP4
+        '-movflags', 'frag_keyframe+empty_moov+faststart', // Optimizado para streaming
+        'pipe:1'                    // Salida a la respuesta HTTP
+    ]);
 
-    // Conectamos la salida de yt-dlp directamente a la respuesta HTTP
-    ytDlp.stdout.pipe(res);
+    ytDlp.stdout.pipe(ffmpeg.stdin);
+    ffmpeg.stdout.pipe(res);
 
     ytDlp.stderr.on('data', (data) => {
-        // Logueamos progreso en el servidor
-        if (data.includes('%')) {
-            console.log(`[PROGRESS] ${data.toString().trim()}`);
-        }
+        if (data.includes('%')) console.log(`[DL-PROGRESS] ${data.toString().trim()}`);
     });
 
-    ytDlp.on('close', (code) => {
-        console.log(`[FINISHED] Proceso terminado con código: ${code}`);
+    ffmpeg.stderr.on('data', (data) => {
+        // Log de ffmpeg para debugging si es necesario
+    });
+
+    ffmpeg.on('close', (code) => {
+        console.log(`[FINISHED] FFmpeg terminado con código: ${code}`);
         if (code !== 0 && !res.headersSent) {
-            res.status(500).send('Error en el proceso de descarga.');
+            res.status(500).send('Error al procesar el video para compatibilidad.');
         }
     });
 
-    // Si el usuario cancela la descarga en el navegador, matamos el proceso
     req.on('close', () => {
         ytDlp.kill();
-        console.log('[CANCELLED] El usuario cerró la conexión.');
+        ffmpeg.kill();
+        console.log('[CANCELLED] Conexión cerrada por el usuario.');
     });
 });
 
