@@ -72,7 +72,7 @@ app.get('/api/download', (req, res) => {
 
     const args = [
         url,
-        '-f', format || 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        '-f', format || 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         '--no-playlist',
         '--no-warnings',
         '-o', '-' // Manda el video al stdout para streaming
