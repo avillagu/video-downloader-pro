@@ -1,0 +1,29 @@
+proyecto terminado. ✅
+Tienes una aplicación robusta:
+Frontend: Vercel (Rápido y bonito).
+Backend: Render (Potente con Docker).
+Monitoreo: UptimeRobot (Siempre despierto).
+Calidad: Máxima posible (MP4).
+
+
+Usuario 👤 → Pega Link en Vercel (Frontend).
+Vercel 📡 → Manda la orden a Render (Backend).
+Render 💻 → Activa Docker y le dice a yt-dlp: "¡Consígueme este video!".
+yt-dlp 🕷️ → Va a YouTube, agarra el video.
+Render 🚿 → Pasa el video directamente al Usuario (Streaming).
+UptimeRobot 🤖 → Vigila que Render no se duerma.
+
+
+
+1. Render = El Hardware (La Torre del PC, el servidor) 🖥️
+Es la computadora física en la nube que te prestan. Tiene electricidad, internet y memoria RAM.
+
+2. Docker = La Instalación de Windows/Linux (El Sistema Operativo y Configuración) 💿
+Cuando usas Docker (Dockerfile), le estás diciendo a esa computadora vacía: "Instálame Alpine Linux (un sistema operativo ligero), configúrame las carpetas así y prepárate para trabajar". Es lo que define el ambiente donde todo vivirá.
+
+3. yt-dlp = El Programa (Software) 💾
+Es como instalar Word o Photoshop, pero en este caso instalaste una herramienta para bajar videos. Es el programa que hace el trabajo específico.
+
+4. Node.js (server.js) = El Usuario / Operador 👨‍💻
+Porque yt-dlp no se manda solo. Necesita que alguien le dé doble clic o escriba el comando.
+Tu archivo server.js es el robot operador que está sentado frente a ese PC esperando. Cuando llega una petición desde Vercel, este operador dice: "Ah, llegó un pedido, voy a ejecutar yt-dlp ahora mismo".

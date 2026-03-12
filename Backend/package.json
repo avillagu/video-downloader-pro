@@ -1,0 +1,13 @@
+{
+  "name": "downloader-backend",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "node -e \"const fs=require('fs'); if(!fs.existsSync('../Frontend/index.html')) throw new Error('Frontend/index.html no encontrado'); console.log('✅ Estructura verificada para producción');\""
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  }
+}
