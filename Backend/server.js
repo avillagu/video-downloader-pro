@@ -94,11 +94,9 @@ app.get('/api/download', (req, res) => {
     res.setHeader('Content-Type', 'video/mp4');
 
     // Estrategia de selección de formato:
-    // 1. bestvideo con H.264 + bestaudio en m4a (combinación ideal, requiere merge)
-    // 2. bestvideo mp4 + bestaudio (cualquier audio, requiere merge)
-    // 3. best mp4 en un solo archivo (pre-mezclado, menos calidad pero seguro)
-    // 4. best (último recurso, cualquier formato)
-    const FORMAT_SELECTOR = 'bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio/best[ext=mp4]/best';
+    // Priorizamos archivos ÚNICOS (single file) para evitar fallos de merge en el pipe.
+    // Solo si no hay un archivo único bueno, intentamos combinar video+audio.
+    const FORMAT_SELECTOR = 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio/best';
 
     const ytDlpArgs = [
         url,
@@ -106,35 +104,26 @@ app.get('/api/download', (req, res) => {
         '--no-playlist',
         '--no-warnings',
         '--no-check-certificate',
+        '--prefer-free-formats',
         '-o', '-' // Salida a stdout
     ];
 
-    // FFmpeg: Transcodifica a H.264/AAC universalmente compatible
-    // PUNTOS CLAVE de compatibilidad:
-    // -c:v libx264         → Codec H.264, soportado en todos los dispositivos
-    // -preset faster       → Equilibrio entre velocidad y compresión
-    // -crf 23              → Calidad visual óptima (menor número = más calidad)
-    // -pix_fmt yuv420p     → CRÍTICO: Sin esto, iOS/Android no reproducen el video
-    // -profile:v high      → Perfil HIGH permite 1080p+ (baseline/main limitan la res)
-    // -level 4.0           → Nivel 4.0 soporta hasta 1080p@30fps en todos los dispositivos
-    // -movflags faststart  → Mueve los metadatos al inicio: el video inicia antes de descargarse
-    // -c:a aac             → Audio AAC, el más compatible
-    // -b:a 192k            → Bitrate de audio de buena calidad
     const ffmpegArgs = [
-        '-i', 'pipe:0',
+        '-i', 'pipe:0',             // Entrada desde yt-dlp
+        '-map', '0:v:0?',           // Mapear primer flujo de video (opcional si no existe)
+        '-map', '0:a:0?',           // Mapear primer flujo de audio (opcional si no existe)
         '-c:v', 'libx264',
-        '-preset', 'faster',
-        '-crf', '23',
+        '-preset', 'ultrafast',     // Volvemos a ultrafast para máxima respuesta
+        '-crf', '24',
         '-pix_fmt', 'yuv420p',
-        '-profile:v', 'high',
-        '-level', '4.0',
+        '-profile:v', 'main',       // Perfil main es más seguro para compatibilidad móvil
+        '-level', '3.1',
         '-c:a', 'aac',
-        '-b:a', '192k',
-        '-ac', '2',                 // Forzar audio estéreo (algunos videos tienen audio extraño)
-        '-ar', '44100',             // Sample rate estándar
-        '-movflags', 'frag_keyframe+empty_moov+faststart',
+        '-b:a', '128k',
+        '-ac', '2',
+        '-movflags', 'frag_keyframe+empty_moov', // REMOVIDO faststart (causa errores en pipes)
         '-f', 'mp4',
-        'pipe:1'                    // Salida a stdout
+        'pipe:1'
     ];
 
     const ytDlp = spawn('yt-dlp', ytDlpArgs);
