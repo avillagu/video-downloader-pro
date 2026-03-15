@@ -39,7 +39,15 @@ app.get('/api/info', (req, res) => {
     const url = req.query.url;
     if (!url) return res.status(400).json({ error: 'URL requerida' });
 
-    const ytDlp = spawn('yt-dlp', ['--dump-json', '--no-playlist', '--no-warnings', url]);
+    const cookiesPath = path.join(__dirname, 'cookies.txt');
+    const hasCookies = fs.existsSync(cookiesPath);
+    
+    const ytDlpArgs = ['--dump-json', '--no-playlist', '--no-warnings', url];
+    if (hasCookies) {
+        ytDlpArgs.push('--cookies', cookiesPath);
+    }
+
+    const ytDlp = spawn('yt-dlp', ytDlpArgs);
     let output = '';
     ytDlp.stdout.on('data', (data) => { output += data; });
     ytDlp.on('close', (code) => {
@@ -69,16 +77,28 @@ app.get('/api/download', async (req, res) => {
 
     console.log(`[PROCESS] Iniciando conversión para WhatsApp: ${url}`);
 
+    // Ruta al archivo de cookies (opcional para videos privados)
+    const cookiesPath = path.join(__dirname, 'cookies.txt');
+    const hasCookies = fs.existsSync(cookiesPath);
+
     // Selección de formato: priorizar archivos únicos
     const FORMAT_SELECTOR = 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio/best';
 
-    const ytDlp = spawn('yt-dlp', [
+    const ytDlpArgs = [
         url,
         '-f', FORMAT_SELECTOR,
         '--no-playlist',
         '--no-warnings',
         '-o', '-' // Stream a stdout
-    ]);
+    ];
+
+    // Si existen cookies, las agregamos al comando
+    if (hasCookies) {
+        console.log('[DEBUG] Usando cookies.txt para la descarga');
+        ytDlpArgs.push('--cookies', cookiesPath);
+    }
+
+    const ytDlp = spawn('yt-dlp', ytDlpArgs);
 
     // FFmpeg: Transcodificar a Baseline Profile para WhatsApp
     const ffmpeg = spawn('ffmpeg', [
