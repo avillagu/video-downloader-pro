@@ -1,5 +1,8 @@
 const express = require('express');
 const { spawn } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const { randomUUID } = require('crypto');
 const cors = require('cors');
 const path = require('path');
 const https = require('https');
@@ -76,23 +79,27 @@ app.get('/api/download', (req, res) => {
         console.error('[yt-dlp stderr]', data.toString().trim());
     });
 
-    // ffmpeg re-codifica a H.264/AAC para compatibilidad universal
+    // ffmpeg re-codifica a H.264/AAC para compatibilidad universal.
+    // Guardamos en un archivo temporal porque WhatsApp rechaza MP4 fragmentados
+    // (los que salen con "empty_moov" cuando se envía por stdout). Al generar
+    // un MP4 progresivo con moov completo logramos compatibilidad amplia.
+    const tmpFile = path.join(os.tmpdir(), `nexstream-${randomUUID()}.mp4`);
+
     const ffmpegArgs = [
         '-hide_banner',
         '-loglevel', 'error',
         '-i', 'pipe:0',
         '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-crf', '28',
+        '-preset', 'veryfast',
+        '-crf', '23',
         '-pix_fmt', 'yuv420p',
         '-profile:v', 'baseline',
-        '-level', '3.0',
+        '-level', '3.1',
         '-c:a', 'aac',
         '-b:a', '128k',
         '-ac', '2',
-        '-movflags', 'frag_keyframe+empty_moov+faststart',
-        '-f', 'mp4',
-        'pipe:1'
+        '-movflags', '+faststart',
+        tmpFile
     ];
 
     const ffmpeg = spawn('ffmpeg', ffmpegArgs);
@@ -103,38 +110,62 @@ app.get('/api/download', (req, res) => {
         console.error('[ffmpeg stderr]', data.toString().trim());
     });
 
-    // Cuando ffmpeg produce los PRIMEROS datos, enviamos los headers
-    ffmpeg.stdout.on('data', (chunk) => {
-        if (!headersSent) {
+    const cleanupTmp = () => {
+        try {
+            if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+        } catch (_) {
+            /* ignore */
+        }
+    };
+
+    const sendFile = () => {
+        fs.stat(tmpFile, (err, stats) => {
+            if (err || !stats.size) {
+                console.error('[DOWNLOAD FAIL] MP4 temporal no encontrado o vacío.');
+                if (!res.headersSent) {
+                    res.status(500).json({ error: 'No se pudo generar el video compatible.' });
+                }
+                cleanupTmp();
+                return;
+            }
+
             headersSent = true;
             res.setHeader('Content-Disposition', 'attachment; filename="video.mp4"');
             res.setHeader('Content-Type', 'video/mp4');
-            res.setHeader('Transfer-Encoding', 'chunked');
-        }
-        // Escribimos el chunk al response. Si el cliente se desconectó, .write() fallará silenciosamente.
-        if (!res.writableEnded) {
-            res.write(chunk);
-        }
-    });
+            res.setHeader('Content-Length', stats.size);
 
-    // Cuando ffmpeg termina de enviar datos
-    ffmpeg.stdout.on('end', () => {
-        if (!headersSent) {
-            // ffmpeg nunca produjo datos → error
-            console.error('[DOWNLOAD FAIL] ffmpeg no produjo datos.');
+            const stream = fs.createReadStream(tmpFile);
+            stream.on('error', (streamErr) => {
+                console.error('[STREAM ERROR]', streamErr.message);
+                if (!res.headersSent) res.status(500).send('Error enviando archivo.');
+                cleanupTmp();
+            });
+
+            stream.on('close', cleanupTmp);
+            stream.pipe(res);
+        });
+    };
+
+    // Cuando ffmpeg termina de escribir el archivo
+    ffmpeg.on('close', (code) => {
+        if (code !== 0) {
+            console.error('[DOWNLOAD FAIL] ffmpeg salió con código', code);
             console.error('[yt-dlp errors]', ytDlpError);
             console.error('[ffmpeg errors]', ffmpegError);
-            if (!res.headersSent) {
+            if (!headersSent && !res.headersSent) {
                 res.status(500).json({
                     error: 'No se pudo procesar el video. Intenta con otro enlace.',
                     details: ytDlpError || ffmpegError || 'Sin detalles'
                 });
             }
+            cleanupTmp();
+            return;
+        }
+
+        if (!res.writableEnded) {
+            sendFile();
         } else {
-            // Todo OK, cerramos la respuesta
-            if (!res.writableEnded) {
-                res.end();
-            }
+            cleanupTmp();
         }
     });
 
@@ -164,6 +195,7 @@ app.get('/api/download', (req, res) => {
     req.on('close', () => {
         ytDlp.kill('SIGTERM');
         ffmpeg.kill('SIGTERM');
+        cleanupTmp();
     });
 });
 
