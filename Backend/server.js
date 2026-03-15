@@ -4,9 +4,6 @@ const cors = require('cors');
 const path = require('path');
 const https = require('https');
 const http = require('http');
-const fs = require('fs');
-const os = require('os');
-const { randomUUID } = require('crypto');
 
 const app = express();
 app.use(cors());
@@ -29,25 +26,15 @@ app.get('/api/proxy-thumb', (req, res) => {
         res.set('Content-Type', proxyRes.headers['content-type'] || 'image/jpeg');
         res.set('Cache-Control', 'public, max-age=86400');
         proxyRes.pipe(res);
-    }).on('error', (e) => {
-        res.status(500).send('Error');
-    });
+    }).on('error', (e) => res.status(500).send('Error'));
 });
 
-// Info del video
+// Info del video (Metadatos)
 app.get('/api/info', (req, res) => {
     const url = req.query.url;
     if (!url) return res.status(400).json({ error: 'URL requerida' });
 
-    const cookiesPath = path.join(__dirname, 'cookies.txt');
-    const hasCookies = fs.existsSync(cookiesPath);
-    
-    const ytDlpArgs = ['--dump-json', '--no-playlist', '--no-warnings', url];
-    if (hasCookies) {
-        ytDlpArgs.push('--cookies', cookiesPath);
-    }
-
-    const ytDlp = spawn('yt-dlp', ytDlpArgs);
+    const ytDlp = spawn('yt-dlp', ['--dump-json', '--no-playlist', '--no-warnings', url]);
     let output = '';
     ytDlp.stdout.on('data', (data) => { output += data; });
     ytDlp.on('close', (code) => {
@@ -58,98 +45,68 @@ app.get('/api/info', (req, res) => {
                 title: info.title,
                 thumbnail: info.thumbnail,
                 duration: info.duration_string || '??:??',
-                extractor: info.extractor_key
+                platform: info.extractor_key
             });
-        } catch (e) {
-            res.status(500).json({ error: 'Error procesando datos.' });
-        }
+        } catch (e) { res.status(500).json({ error: 'Error procesando datos.' }); }
     });
 });
 
-// Descarga con procesamiento temporal para compatibilidad total (WhatsApp)
-app.get('/api/download', async (req, res) => {
+// Descarga en tiempo real (Streaming) - ULTRA RÁPIDO
+app.get('/api/download', (req, res) => {
     const { url } = req.query;
     if (!url) return res.status(400).send('Falta la URL');
 
-    // Generar ruta de archivo temporal
-    const tempFileName = `nexstream_${randomUUID()}.mp4`;
-    const tempPath = path.join(os.tmpdir(), tempFileName);
+    console.log(`[STREAM] Iniciando descarga ultra-rápida: ${url}`);
 
-    console.log(`[PROCESS] Iniciando conversión para WhatsApp: ${url}`);
+    // Cabeceras de respuesta inmediata
+    res.setHeader('Content-Disposition', 'attachment; filename="video.mp4"');
+    res.setHeader('Content-Type', 'video/mp4');
 
-    // Ruta al archivo de cookies (opcional para videos privados)
-    const cookiesPath = path.join(__dirname, 'cookies.txt');
-    const hasCookies = fs.existsSync(cookiesPath);
+    // Priorizamos archivos únicos de MP4 para evitar el lento "merging"
+    const FORMAT_SELECTOR = 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best';
 
-    // Selección de formato: priorizar archivos únicos
-    const FORMAT_SELECTOR = 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio/best';
-
-    const ytDlpArgs = [
+    const ytDlp = spawn('yt-dlp', [
         url,
         '-f', FORMAT_SELECTOR,
         '--no-playlist',
         '--no-warnings',
-        '-o', '-' // Stream a stdout
-    ];
-
-    // Si existen cookies, las agregamos al comando
-    if (hasCookies) {
-        console.log('[DEBUG] Usando cookies.txt para la descarga');
-        ytDlpArgs.push('--cookies', cookiesPath);
-    }
-
-    const ytDlp = spawn('yt-dlp', ytDlpArgs);
-
-    // FFmpeg: Transcodificar a Baseline Profile para WhatsApp
-    const ffmpeg = spawn('ffmpeg', [
-        '-i', 'pipe:0',
-        '-map', '0:v:0?',
-        '-map', '0:a:0?',
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-crf', '26',               // Un poco más de compresión para que pese menos en Wpp
-        '-pix_fmt', 'yuv420p',
-        '-profile:v', 'baseline',    // EL MÁS COMPATIBLE PARA WHATSAPP
-        '-level', '3.0',
-        '-c:a', 'aac',
-        '-b:a', '128k',
-        '-ac', '2',
-        '-movflags', '+faststart',   // Mueve metadatos al inicio para previsualización en Wpp
-        '-y',                        // Sobrescribir si existe
-        tempPath                     // Salida a un archivo físico, NO a tubería
+        '-o', '-' // Salida a stdout para streaming
     ]);
 
+    // FFmpeg para compatibilidad en tiempo real
+    const ffmpeg = spawn('ffmpeg', [
+        '-i', 'pipe:0',
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast', // Velocidad de CPU máxima
+        '-tune', 'zerolatency', // Crucial para streaming
+        '-crf', '28',           // Un poco más comprimido para que viaje más rápido por internet
+        '-pix_fmt', 'yuv420p',
+        '-profile:v', 'baseline',
+        '-level', '3.0',
+        '-c:a', 'aac',
+        '-b:a', '96k',          // Bajamos un poco el audio para ganar velocidad
+        '-ac', '2',
+        '-f', 'mp4',
+        '-movflags', 'frag_keyframe+empty_moov+faststart', // Fragmentado pero con pista para empezar rápido
+        'pipe:1'
+    ]);
+
+    // Conexión de tuberías (Pipes)
     ytDlp.stdout.pipe(ffmpeg.stdin);
+    ffmpeg.stdout.pipe(res);
 
-    ffmpeg.on('close', (code) => {
-        if (code === 0 && fs.existsSync(tempPath)) {
-            console.log(`[FINISHED] Archivo listo para enviar: ${tempFileName}`);
-            
-            // Enviar el archivo procesado al usuario
-            res.download(tempPath, 'video.mp4', (err) => {
-                // Borrar archivo temporal después de enviado
-                if (fs.existsSync(tempPath)) {
-                    fs.unlinkSync(tempPath);
-                    console.log(`[CLEANUP] Archivo temporal borrado.`);
-                }
-            });
-        } else {
-            console.error(`[ERROR] FFmpeg falló o archivo no generado.`);
-            if (!res.headersSent) res.status(500).send('Error al procesar el video.');
-            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-        }
-    });
+    // Manejo de errores y limpieza
+    ytDlp.on('error', (err) => console.error('yt-dlp error:', err));
+    ffmpeg.on('error', (err) => console.error('ffmpeg error:', err));
 
-    // Cancelación si el usuario cierra la conexión
     req.on('close', () => {
         ytDlp.kill();
         ffmpeg.kill();
-        // Esperar un poco para borrar el archivo si se estaba creando
-        setTimeout(() => { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); }, 1000);
+        console.log('[CLEANUP] Streaming cancelado por el usuario.');
     });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 NexStream Backend listo en puerto ${PORT}`);
+    console.log(`🚀 NexStream Speed-Engine listo en puerto ${PORT}`);
 });
