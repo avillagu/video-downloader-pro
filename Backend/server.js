@@ -2,13 +2,14 @@ const express = require('express');
 const { spawn } = require('child_process');
 const cors = require('cors');
 const path = require('path');
-const https = require('https'); // Para el proxy de miniaturas
+const https = require('https');
+const http = require('http');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Servir archivos estáticos del Frontend (ahora en la carpeta public)
+// Servir archivos estáticos del Frontend
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Endpoint de salud para cron-job.org
@@ -20,15 +21,15 @@ app.get('/api/ping', (req, res) => {
 app.get('/api/proxy-thumb', (req, res) => {
     const thumbUrl = req.query.url;
     if (!thumbUrl) return res.status(400).send('URL missing');
-    
-    https.get(thumbUrl, (proxyRes) => {
-        // Copiamos el tipo de contenido original
+
+    const protocol = thumbUrl.startsWith('https') ? https : http;
+
+    protocol.get(thumbUrl, (proxyRes) => {
         res.set('Content-Type', proxyRes.headers['content-type'] || 'image/jpeg');
-        // Cachear las miniaturas por 1 día para mejorar rendimiento
         res.set('Cache-Control', 'public, max-age=86400');
         proxyRes.pipe(res);
     }).on('error', (e) => {
-        console.error('Error in proxy-thumb:', e);
+        console.error('Error in proxy-thumb:', e.message);
         res.status(500).send('Error');
     });
 });
@@ -48,11 +49,14 @@ app.get('/api/info', (req, res) => {
     ]);
 
     let output = '';
+    let errorOutput = '';
+
     ytDlp.stdout.on('data', (data) => { output += data; });
+    ytDlp.stderr.on('data', (data) => { errorOutput += data; });
 
     ytDlp.on('close', (code) => {
         if (code !== 0) {
-            console.error(`[ERROR] yt-dlp salió con código ${code}`);
+            console.error(`[ERROR] yt-dlp salió con código ${code}: ${errorOutput}`);
             return res.status(500).json({ error: 'No se pudo obtener la información del video. Verifica el enlace.' });
         }
         try {
@@ -60,89 +64,171 @@ app.get('/api/info', (req, res) => {
             res.json({
                 title: info.title,
                 thumbnail: info.thumbnail,
-                duration: info.duration_string,
+                duration: info.duration_string || '??:??',
                 uploader: info.uploader,
                 platform: info.extractor_key,
-                formats: info.formats.filter(f => f.ext === 'mp4').map(f => ({
-                    format_id: f.format_id,
-                    resolution: f.resolution,
-                    filesize: f.filesize
-                })).slice(0, 5) // Devolvemos los 5 mejores formatos MP4
             });
         } catch (e) {
             console.error('[ERROR] Error parseando JSON de yt-dlp', e);
             res.status(500).json({ error: 'Error al procesar metadatos del video.' });
         }
     });
+
+    ytDlp.on('error', (err) => {
+        console.error('[ERROR] No se pudo iniciar yt-dlp:', err.message);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Error interno: yt-dlp no disponible.' });
+        }
+    });
 });
 
 // Endpoint principal de descarga
 app.get('/api/download', (req, res) => {
-    const { url, format } = req.query;
+    const { url } = req.query;
     if (!url) return res.status(400).send('Falta la URL');
 
     console.log(`[DOWNLOAD] Iniciando descarga: ${url}`);
 
-    // Configuración de cabeceras para streaming de video
-    // Usamos el formato sugerido o el mejor disponible
-    res.header('Content-Disposition', `attachment; filename="video.mp4"`);
-    res.header('Content-Type', 'video/mp4');
+    // Cabeceras para que el navegador descargue el archivo
+    res.setHeader('Content-Disposition', 'attachment; filename="video.mp4"');
+    res.setHeader('Content-Type', 'video/mp4');
 
-    // Forzamos la descarga en MP4 H.264 para compatibilidad universal
-    const args = [
+    // Estrategia de selección de formato:
+    // 1. bestvideo con H.264 + bestaudio en m4a (combinación ideal, requiere merge)
+    // 2. bestvideo mp4 + bestaudio (cualquier audio, requiere merge)
+    // 3. best mp4 en un solo archivo (pre-mezclado, menos calidad pero seguro)
+    // 4. best (último recurso, cualquier formato)
+    const FORMAT_SELECTOR = 'bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio/best[ext=mp4]/best';
+
+    const ytDlpArgs = [
         url,
-        '-f', format || 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        '-f', FORMAT_SELECTOR,
         '--no-playlist',
         '--no-warnings',
-        '-o', '-' 
+        '--no-check-certificate',
+        '-o', '-' // Salida a stdout
     ];
 
-    const ytDlp = spawn('yt-dlp', args);
-    
-    // Usamos FFmpeg para asegurar compatibilidad total:
-    // 1. -pix_fmt yuv420p: Crucial para que se vea en iPhone/Android.
-    // 2. Transcodificamos a H.264 y AAC de forma ultra-rápida.
-    const ffmpeg = spawn('ffmpeg', [
-        '-i', 'pipe:0',             // Entrada desde yt-dlp
-        '-c:v', 'libx264',          // Codec de video universal
-        '-preset', 'ultrafast',     // Máxima velocidad para que no parezca que tarda
-        '-crf', '25',               // Calidad buena (un poco más comprimida para rapidez)
-        '-pix_fmt', 'yuv420p',      // EL SECRETO: Formato de píxeles compatible con móviles
-        '-profile:v', 'main',       // Perfil Main: equilibrio perfecto entre calidad y compatibilidad móvil
-        '-level', '3.1',            // Nivel 3.1: Asegura que funcione en dispositivos antiguos y modernos
-        '-c:a', 'aac',              // Codec de audio universal
-        '-b:a', '128k',             // Calidad de audio estándar
-        '-f', 'mp4',
+    // FFmpeg: Transcodifica a H.264/AAC universalmente compatible
+    // PUNTOS CLAVE de compatibilidad:
+    // -c:v libx264         → Codec H.264, soportado en todos los dispositivos
+    // -preset faster       → Equilibrio entre velocidad y compresión
+    // -crf 23              → Calidad visual óptima (menor número = más calidad)
+    // -pix_fmt yuv420p     → CRÍTICO: Sin esto, iOS/Android no reproducen el video
+    // -profile:v high      → Perfil HIGH permite 1080p+ (baseline/main limitan la res)
+    // -level 4.0           → Nivel 4.0 soporta hasta 1080p@30fps en todos los dispositivos
+    // -movflags faststart  → Mueve los metadatos al inicio: el video inicia antes de descargarse
+    // -c:a aac             → Audio AAC, el más compatible
+    // -b:a 192k            → Bitrate de audio de buena calidad
+    const ffmpegArgs = [
+        '-i', 'pipe:0',
+        '-c:v', 'libx264',
+        '-preset', 'faster',
+        '-crf', '23',
+        '-pix_fmt', 'yuv420p',
+        '-profile:v', 'high',
+        '-level', '4.0',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-ac', '2',                 // Forzar audio estéreo (algunos videos tienen audio extraño)
+        '-ar', '44100',             // Sample rate estándar
         '-movflags', 'frag_keyframe+empty_moov+faststart',
-        'pipe:1'
-    ]);
+        '-f', 'mp4',
+        'pipe:1'                    // Salida a stdout
+    ];
 
+    const ytDlp = spawn('yt-dlp', ytDlpArgs);
+    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+
+    let ytDlpError = '';
+    let ffmpegError = '';
+    let headersSent = false;
+
+    // Pipe: yt-dlp → ffmpeg → cliente
     ytDlp.stdout.pipe(ffmpeg.stdin);
     ffmpeg.stdout.pipe(res);
 
+    // Capturar stderr de yt-dlp para diagnóstico
     ytDlp.stderr.on('data', (data) => {
-        if (data.includes('%')) console.log(`[DL-PROGRESS] ${data.toString().trim()}`);
-    });
-
-    ffmpeg.stderr.on('data', (data) => {
-        // Log de ffmpeg para debugging si es necesario
-    });
-
-    ffmpeg.on('close', (code) => {
-        console.log(`[FINISHED] FFmpeg terminado con código: ${code}`);
-        if (code !== 0 && !res.headersSent) {
-            res.status(500).send('Error al procesar el video para compatibilidad.');
+        const msg = data.toString();
+        ytDlpError += msg;
+        if (msg.includes('[download]') && msg.includes('%')) {
+            process.stdout.write(`\r[DL-PROGRESS] ${msg.trim()}`);
+        } else {
+            console.log(`[YT-DLP] ${msg.trim()}`);
         }
     });
 
+    // Capturar stderr de ffmpeg para diagnóstico
+    ffmpeg.stderr.on('data', (data) => {
+        const msg = data.toString().trim();
+        ffmpegError += msg;
+        // Solo loguear líneas importantes de ffmpeg, no el flujo completo
+        if (msg.includes('Error') || msg.includes('error') || msg.includes('Invalid')) {
+            console.error(`[FFMPEG-ERR] ${msg}`);
+        }
+    });
+
+    // Manejo de error al iniciar yt-dlp
+    ytDlp.on('error', (err) => {
+        console.error('[FATAL] No se pudo iniciar yt-dlp:', err.message);
+        ffmpeg.kill('SIGTERM');
+        if (!headersSent && !res.headersSent) {
+            headersSent = true;
+            res.status(500).end('Error: yt-dlp no está disponible en el servidor.');
+        }
+    });
+
+    // Manejo de error al iniciar ffmpeg
+    ffmpeg.on('error', (err) => {
+        console.error('[FATAL] No se pudo iniciar ffmpeg:', err.message);
+        ytDlp.kill('SIGTERM');
+        if (!headersSent && !res.headersSent) {
+            headersSent = true;
+            res.status(500).end('Error: ffmpeg no está disponible en el servidor.');
+        }
+    });
+
+    // Cuando yt-dlp termina
+    ytDlp.on('close', (code) => {
+        console.log(`[YT-DLP] Proceso terminado, código: ${code}`);
+        if (code !== 0) {
+            console.error(`[YT-DLP-ERR] ${ytDlpError.slice(-500)}`);
+            // Cerramos el stdin de ffmpeg para que pueda terminar limpiamente
+            if (ffmpeg.stdin && !ffmpeg.stdin.destroyed) {
+                ffmpeg.stdin.end();
+            }
+        }
+    });
+
+    // Cuando ffmpeg termina
+    ffmpeg.on('close', (code) => {
+        if (code === 0) {
+            console.log('[FINISHED] ✅ Video procesado y enviado correctamente.');
+        } else {
+            console.error(`[FFMPEG] Terminó con código ${code}. Últimos logs: ${ffmpegError.slice(-500)}`);
+        }
+        if (!res.writableEnded) {
+            res.end();
+        }
+    });
+
+    // Si el cliente cancela la descarga, limpiamos los procesos
     req.on('close', () => {
-        ytDlp.kill();
-        ffmpeg.kill();
-        console.log('[CANCELLED] Conexión cerrada por el usuario.');
+        console.log('[CANCELLED] Conexión cerrada por el usuario, limpiando procesos...');
+        ytDlp.kill('SIGTERM');
+        ffmpeg.kill('SIGTERM');
+    });
+
+    // Manejar errores de escritura en la respuesta (cliente desconectado)
+    res.on('error', (err) => {
+        console.error('[RES-ERROR] Error en la respuesta:', err.message);
+        ytDlp.kill('SIGTERM');
+        ffmpeg.kill('SIGTERM');
     });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Video Downloader Backend listo en puerto ${PORT}`);
+    console.log(`🚀 NexStream Backend listo en puerto ${PORT}`);
 });

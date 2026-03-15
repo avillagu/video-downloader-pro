@@ -4,12 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NexStream | Video Downloader Pro</title>
+    <meta name="description" content="Descarga videos de YouTube, TikTok, Instagram Reels y más en formato MP4 compatible con todos tus dispositivos. Sin registro, sin límites.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #FF3D00;
+            --primary-dark: #cc3100;
             --primary-glow: rgba(255, 61, 0, 0.4);
             --bg: #050505;
             --card-bg: #111111;
@@ -17,6 +19,8 @@
             --text-dim: #888888;
             --border: #222222;
             --gradient: linear-gradient(135deg, #FF3D00 0%, #FF8A00 100%);
+            --success: #22c55e;
+            --warning: #f59e0b;
         }
 
         * {
@@ -78,11 +82,30 @@
             -webkit-text-fill-color: transparent;
         }
 
-        .hero p {
+        .hero > p {
             font-size: 1.2rem;
             color: var(--text-dim);
             max-width: 600px;
             margin-bottom: 50px;
+        }
+
+        /* --- BADGES --- */
+        .badges {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+
+        .badge {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            padding: 6px 16px;
+            font-size: 0.82rem;
+            color: var(--text-dim);
+            letter-spacing: 0.5px;
         }
 
         /* --- SEARCH BOX --- */
@@ -114,6 +137,8 @@
             padding: 15px 20px;
         }
 
+        input::placeholder { color: #444; }
+
         .btn-analyze {
             background: var(--gradient);
             color: white;
@@ -121,14 +146,17 @@
             padding: 15px 35px;
             border-radius: 14px;
             font-weight: 700;
+            font-size: 1rem;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: transform 0.2s, opacity 0.2s;
             display: flex;
             align-items: center;
             gap: 10px;
+            white-space: nowrap;
         }
 
         .btn-analyze:hover { transform: scale(1.03); }
+        .btn-analyze:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
         /* --- PREVIEW --- */
         #previewArea {
@@ -157,26 +185,33 @@
 
         .vid-thumb {
             width: 200px;
+            min-width: 200px;
             aspect-ratio: 16/9;
             border-radius: 12px;
             object-fit: cover;
             box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+            background: #1a1a1a;
         }
 
         .vid-title {
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             font-weight: 700;
             margin-bottom: 10px;
-            line-height: 1.3;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
 
         .vid-meta {
             color: var(--text-dim);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
 
+        /* --- DOWNLOAD BUTTON --- */
         .btn-download {
             width: 100%;
             background: white;
@@ -189,24 +224,71 @@
             cursor: pointer;
             transition: all 0.3s;
             text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
         }
 
-        .btn-download:hover { background: #ddd; }
+        .btn-download:hover:not(:disabled) { background: #ddd; }
+        .btn-download:disabled {
+            background: #1a1a1a;
+            color: var(--text-dim);
+            cursor: not-allowed;
+            border: 1px solid var(--border);
+        }
+
+        /* Download progress state */
+        .btn-download.downloading {
+            background: linear-gradient(135deg, #1a1a1a, #222);
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+            cursor: wait;
+        }
+
+        /* --- NOTICE BANNER --- */
+        .notice {
+            display: none;
+            margin-top: 15px;
+            padding: 14px 18px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            text-align: left;
+        }
+
+        .notice.info {
+            background: rgba(255, 140, 0, 0.1);
+            border: 1px solid rgba(255, 140, 0, 0.3);
+            color: var(--warning);
+        }
+
+        .notice.success {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: var(--success);
+        }
 
         /* --- LOADER --- */
         .loader {
             display: none;
-            width: 24px;
-            height: 24px;
+            width: 22px;
+            height: 22px;
             border: 3px solid rgba(255,255,255,0.2);
             border-top: 3px solid white;
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
+        }
+
+        .loader.dark {
+            border-color: rgba(255,255,255,0.1);
+            border-top-color: var(--text-dim);
         }
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* --- INFO --- */
+        /* --- INFO CARDS --- */
         .info-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -222,17 +304,28 @@
             border-radius: 30px;
             border: 1px solid var(--border);
             text-align: center;
+            transition: border-color 0.3s, transform 0.3s;
         }
 
-        .info-card h3 { margin-bottom: 15px; font-size: 1.4rem; }
+        .info-card:hover {
+            border-color: rgba(255,61,0,0.3);
+            transform: translateY(-4px);
+        }
+
+        .info-card .icon {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+
+        .info-card h3 { margin-bottom: 12px; font-size: 1.3rem; }
         .info-card p { color: var(--text-dim); line-height: 1.6; }
 
         footer {
-            padding: 50px;
+            padding: 40px 50px;
             text-align: center;
             border-top: 1px solid var(--border);
             color: var(--text-dim);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
 
         @media (max-width: 650px) {
@@ -240,8 +333,10 @@
             input { background: var(--card-bg); border: 1px solid var(--border); border-radius: 15px; width: 100%; margin-bottom: 10px; }
             .btn-analyze { width: 100%; justify-content: center; padding: 20px; }
             .vid-card { flex-direction: column; }
-            .vid-thumb { width: 100%; }
-            h1 { font-size: 3rem; }
+            .vid-thumb { width: 100%; min-width: unset; }
+            h1 { font-size: 2.8rem; letter-spacing: -1px; }
+            .hero > p { font-size: 1rem; margin-bottom: 30px; }
+            .badges { gap: 8px; }
         }
     </style>
 </head>
@@ -252,12 +347,27 @@
     </header>
 
     <main class="hero">
-        <h1>Baja cualquier video <span>al instante.</span></h1>
-        <p>YouTube, Reels, TikTok y más. Formato universal MP4 compatible con todos los dispositivos.</p>
+        <h1>Descarga cualquier video <span>al instante.</span></h1>
+        <p>YouTube, Reels, TikTok y más. Convertido automáticamente a MP4 H.264 compatible con todos tus dispositivos.</p>
+
+        <div class="badges">
+            <span class="badge">▶ YouTube</span>
+            <span class="badge">📸 Instagram</span>
+            <span class="badge">🎵 TikTok</span>
+            <span class="badge">🐦 Twitter/X</span>
+            <span class="badge">📘 Facebook</span>
+        </div>
 
         <div class="search-container">
-            <input type="text" id="urlInput" placeholder="Pega el enlace aquí..." onkeydown="if(event.key==='Enter') analizar()">
-            <button class="btn-analyze" onclick="analizar()">
+            <input
+                type="text"
+                id="urlInput"
+                placeholder="Pega el enlace del video aquí..."
+                onkeydown="if(event.key==='Enter') analizar()"
+                autocomplete="off"
+                spellcheck="false"
+            >
+            <button class="btn-analyze" id="btnAnalyze" onclick="analizar()">
                 <span id="btnText">Analizar</span>
                 <div id="btnLoader" class="loader"></div>
             </button>
@@ -265,76 +375,159 @@
 
         <div id="previewArea">
             <div class="vid-card">
-                <img id="vidThumb" class="vid-thumb" src="" alt="Vid">
+                <img id="vidThumb" class="vid-thumb" src="" alt="Miniatura del video">
                 <div class="vid-info">
                     <div id="vidTitle" class="vid-title">Cargando...</div>
                     <div id="vidMeta" class="vid-meta">PLATAFORMA • 0:00</div>
                 </div>
             </div>
-            <button class="btn-download" onclick="descargar()">Descargar en MP4 HD</button>
+
+            <button class="btn-download" id="btnDownload" onclick="descargar()">
+                <span id="downloadText">⬇ Descargar en MP4 HD</span>
+                <div id="downloadLoader" class="loader dark" style="display:none;"></div>
+            </button>
+
+            <div id="downloadNotice" class="notice info">
+                ⏳ <strong>Procesando video...</strong> Estamos convirtiendo el video a MP4 compatible. Esto puede tomar entre 30 segundos y 2 minutos dependiendo de la duración. <strong>No cierres la pestaña.</strong>
+            </div>
         </div>
     </main>
 
     <section style="display: flex; justify-content: center; padding: 0 5%;">
         <div class="info-grid">
             <div class="info-card">
-                <h3>Universal</h3>
-                <p>Convertimos cada descarga a H.264 para que se vea en cualquier iPhone, Android o Smart TV.</p>
+                <div class="icon">📱</div>
+                <h3>Compatible Universal</h3>
+                <p>Convertimos cada descarga a H.264 / AAC para que se reproduzca en cualquier iPhone, Android, Smart TV o computadora.</p>
             </div>
             <div class="info-card">
+                <div class="icon">🔒</div>
                 <h3>Privado</h3>
-                <p>Sin cuentas, sin rastreo. Tus descargas son solo tuyas.</p>
+                <p>Sin cuentas, sin rastreo. No guardamos ningún dato ni historial de tus descargas.</p>
             </div>
             <div class="info-card">
-                <h3>Sin Límites</h3>
-                <p>Descarga videos de cualquier tamaño en resolución máxima disponible.</p>
+                <div class="icon">🚀</div>
+                <h3>Calidad Máxima</h3>
+                <p>Descargamos la mejor calidad disponible y la procesamos para que sea perfecta en todos tus dispositivos.</p>
             </div>
         </div>
     </section>
 
     <footer>
-        <p>&copy; 2026 NexStream Pro • Calidad Máxima en MP4</p>
+        <p>© 2026 NexStream Pro • Solo para uso personal y contenido de dominio público</p>
     </footer>
 
     <script>
-        const API_BASE = ''; 
+        const API_BASE = '';
+        let currentUrl = '';
 
         async function analizar() {
             const url = document.getElementById('urlInput').value.trim();
+            if (!url) {
+                document.getElementById('urlInput').focus();
+                return;
+            }
+
+            currentUrl = url;
+
+            const btnAnalyze = document.getElementById('btnAnalyze');
             const btnText = document.getElementById('btnText');
             const btnLoader = document.getElementById('btnLoader');
             const previewArea = document.getElementById('previewArea');
 
-            if (!url) return;
-
+            // Reset estado previo
+            resetDownloadState();
+            previewArea.style.display = 'none';
+            btnAnalyze.disabled = true;
             btnText.style.display = 'none';
             btnLoader.style.display = 'block';
-            previewArea.style.display = 'none';
 
             try {
                 const res = await fetch(`${API_BASE}/api/info?url=${encodeURIComponent(url)}`);
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({ error: `Error del servidor (${res.status})` }));
+                    throw new Error(errData.error || `Error del servidor (${res.status})`);
+                }
+
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
 
-                // Usamos el proxy para saltar el bloqueo de seguridad de IG/FB
-                document.getElementById('vidThumb').src = `${API_BASE}/api/proxy-thumb?url=${encodeURIComponent(data.thumbnail)}`;
-                
-                document.getElementById('vidTitle').innerText = data.title;
-                document.getElementById('vidMeta').innerText = `${data.platform.toUpperCase()} • ${data.duration}`;
-                
+                // Usar proxy para la miniatura (evita bloqueos CORS de IG/FB)
+                const thumbSrc = data.thumbnail
+                    ? `${API_BASE}/api/proxy-thumb?url=${encodeURIComponent(data.thumbnail)}`
+                    : '';
+                document.getElementById('vidThumb').src = thumbSrc;
+                document.getElementById('vidTitle').innerText = data.title || 'Sin título';
+                document.getElementById('vidMeta').innerText = `${(data.platform || 'WEB').toUpperCase()} • ${data.duration || '??:??'}`;
+
                 previewArea.style.display = 'block';
-                previewArea.scrollIntoView({ behavior: 'smooth' });
+                previewArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
             } catch (err) {
-                alert("Error al analizar: " + err.message);
+                console.error('[ANALYZE ERROR]', err);
+                alert('❌ No se pudo analizar el video.\n\n' + err.message);
             } finally {
+                btnAnalyze.disabled = false;
                 btnText.style.display = 'block';
                 btnLoader.style.display = 'none';
             }
         }
 
         function descargar() {
-            const url = document.getElementById('urlInput').value.trim();
-            window.location.href = `${API_BASE}/api/download?url=${encodeURIComponent(url)}`;
+            const url = currentUrl || document.getElementById('urlInput').value.trim();
+            if (!url) return;
+
+            const btn = document.getElementById('btnDownload');
+            const downloadText = document.getElementById('downloadText');
+            const downloadLoader = document.getElementById('downloadLoader');
+            const notice = document.getElementById('downloadNotice');
+
+            // Mostrar estado de descarga en progreso
+            btn.disabled = true;
+            btn.classList.add('downloading');
+            downloadText.textContent = 'Procesando y descargando...';
+            downloadLoader.style.display = 'block';
+            notice.style.display = 'block';
+            notice.className = 'notice info';
+
+            // Iniciar la descarga creando un <a> temporal
+            // Esto permite que el navegador gestione la descarga mientras
+            // el botón muestra el estado de progreso
+            const downloadUrl = `${API_BASE}/api/download?url=${encodeURIComponent(url)}`;
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = 'video.mp4';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // El navegador gestiona la descarga en background
+            // Restauramos la UI después de un tiempo prudencial
+            setTimeout(() => {
+                resetDownloadState();
+                notice.style.display = 'block';
+                notice.className = 'notice success';
+                notice.innerHTML = '✅ <strong>¡Descarga iniciada!</strong> Si el archivo no apareció, el video puede no estar disponible. Intenta con otro enlace.';
+
+                // Ocultar el aviso éxito después de 10 segundos
+                setTimeout(() => {
+                    notice.style.display = 'none';
+                }, 10000);
+            }, 4000);
+        }
+
+        function resetDownloadState() {
+            const btn = document.getElementById('btnDownload');
+            const downloadText = document.getElementById('downloadText');
+            const downloadLoader = document.getElementById('downloadLoader');
+            const notice = document.getElementById('downloadNotice');
+
+            btn.disabled = false;
+            btn.classList.remove('downloading');
+            downloadText.textContent = '⬇ Descargar en MP4 HD';
+            downloadLoader.style.display = 'none';
+            notice.style.display = 'none';
         }
     </script>
 </body>
